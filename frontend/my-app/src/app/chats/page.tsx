@@ -22,6 +22,9 @@ export default function Chats() {
     const [sendMessage, setSendMessage] = useState(null);
     const [chatData, setChatData] = useState<{members:[]} | null>(null);
     const [receiverStatus, setReceiverStatus] = useState(false);
+    const [isTypingStatus, setIsTypingStatus] = useState(false);
+    const [receiverTyping, setReceiverTyping] = useState(false);
+    let timeout:ReturnType<typeof setTimeout>  | null = null;
     
 
 
@@ -74,6 +77,14 @@ export default function Chats() {
                 if (userData?.user._id === message.receiverId)
                 {
                     setMessages([...messages, message])
+                }
+            })
+
+            socket.current.on("typing", (senderId) => {
+                if (senderId === receiverId)
+                {
+                    setReceiverTyping(true);
+                    setTimeout(() => setReceiverTyping(false), 3000);
                 }
             })
         }
@@ -147,6 +158,35 @@ export default function Chats() {
     }
 
 
+    function handleInputChange(e: React.ChangeEvent<HTMLInputElement>)
+    {
+        e.preventDefault();
+        setInputValue((e.target as HTMLInputElement).value);
+        if (isTypingStatus === false)
+        {
+            setIsTypingStatus(true);
+            if (socket.current && userData)
+            {
+                socket.current.emit("typing", {senderId: userData.user._id, receiverId});
+            }
+        }
+        else 
+        {
+            if (timeout)
+            {
+                clearTimeout(timeout);
+            }
+            if (socket.current && userData)
+            {
+                socket.current?.emit("typing", {senderId: userData.user._id, receiverId})
+                timeout = setTimeout(() => {
+                    setIsTypingStatus(false);
+                }, 3000);
+            }
+        }
+    }
+
+
     if (!userData) {
         return (
             <h1>Please wait, fetching user data...</h1>
@@ -155,7 +195,7 @@ export default function Chats() {
 
     return (
         <main className='flex flex-col items-center relative min-h-screen justify-end py-20'>
-            <div className="receiver absolute top-5">{receiverEmail} {receiverStatus ? "online" : "offline"}</div>
+            <div className="receiver absolute top-5">{receiverEmail} {receiverStatus ? "online" : "offline"}{receiverTyping ? "typing..." : ""}</div>
             <div className="messages flex flex-col items-center">
                 {
                     messages && messages.map((message, index) => (
@@ -164,7 +204,7 @@ export default function Chats() {
                 }
             </div>
             <form className='mt-10 p-10 bg-slate-700'>
-                <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
+                <input type="text" value={inputValue} onChange={handleInputChange} />
                 <button onClick={handleSendMessage}>
                     Send Message
                 </button>
